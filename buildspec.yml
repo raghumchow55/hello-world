@@ -17,7 +17,7 @@ phases:
       - ls
       - mv target/HelloWorld-2.6.5.war target/white-hart.war
       - docker build -t white-hart:latest .
-      - docker tag white-hart:latest 918426310334.dkr.ecr.us-east-1.amazonaws.com/test:latest
+      - docker tag white-hart:latest 596720955985.dkr.ecr.us-east-1.amazonaws.com/test:latest
       - docker push 596720955985.dkr.ecr.us-east-1.amazonaws.com/test:latest
       - pwd
       # - aws ecs list-services --cluster white-hart | jq -r .serviceArns[]  | grep white-hart | awk -F/ {'print $3'}  > consumer-services.txt
