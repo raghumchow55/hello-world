@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: personal-website
-          image: 91842631033
+          image: 596720955985
           ports:
             - containerPort: 80
           resources:
