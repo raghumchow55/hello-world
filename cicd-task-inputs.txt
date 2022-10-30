@@ -1,0 +1,157 @@
+import json
+import boto3
+
+client = boto3.client('codebuild')
+
+def lambda_handler(event, context):
+  print("Received event:" + json.dumps(event, indent=2))
+  response = client.start_build(
+    projectName=event['Records'][0]['customData'],sourceVersion=event['Records'][0]['codecommit']['references'][0]['commit']
+  )
+  return "Build triggered"
+
+
+  -----------------
+
+  Codebuild --- buildspec.yml maven build and uploads artifacts
+
+
+  version: 0.2
+phases:
+  install:
+    runtime-versions:
+      java: corretto8
+  pre_build:
+    commands:
+        - 'echo ***** Build completed *****'
+        - aws s3 cp s3://ivrepo/maven-test-config/settings.xml /opt/maven/conf/settings.xml
+        - aws secretsmanager get-secret-value --secret-id codecommit-priv-key | jq -r .SecretString > /root/.ssh/id_rsa
+        - aws s3 cp s3://ivrepo/codebuild-ssh-key/config /root/.ssh/
+        - chmod 0600 /root/.ssh/id_rsa
+        - aws s3 cp s3://ivrepo/git-config-file/.gitconfig /root/
+        - ssh -tt -o StrictHostKeyChecking=no git-codecommit.us-east-1.amazonaws.com ; exit 0
+  build:
+    commands:
+        - BRANCH=`git branch -a --contains HEAD | sed -n 2p | awk '{ printf $1 }'`
+        - echo $BRANCH
+#        - if [ $BRANCH != 'dev-master' ]; then echo "Not running in dev-master branch"; exit 1; fi;
+        - mvn -version
+        # - mvn versions:use-latest-versions -Dincludes="com.insideview*" -DexcludeReactor=false -DallowSnapshots=true -DallowMinorUpdates=true -DallowMajorUpdates=true
+        - mvn clean install 
+        - VERSION=`mvn -q -Dexec.executable="echo" -Dexec.args='${project.version}' --non-recursive org.codehaus.mojo:exec-maven-plugin:1.3.1:exec -f .`
+        - echo $VERSION
+        - COMMITID=`aws codecommit get-branch --repository-name coreservice --branch-name dev-master | jq .branch.commitId | tr -d '"'`
+        - echo $VERSION $COMMITID > version.html
+        - echo $COMMITID > commitid.html
+        - git remote set-url --add --push origin ssh://git-codecommit.us-east-1.amazonaws.com/v1/repos/coreservice
+        - git checkout $BRANCH
+        - git branch
+        - git status
+        - git add -u
+        - git diff-index --quiet HEAD || git commit -m "DEV-2000 Committing the new version upgrades in pom.xml(s)"
+        - git push origin $BRANCH
+        - cp coreservice-server/target/coreservice-*.war coreservice-server/target/coreservice.war
+        - cp coreservice-webclient/target/webclient-*.war coreservice-webclient/target/webclient.war
+        #- jar uvf coreservice-server/target/coreservice.war version.html
+        #- jar uvf coreservice-server/target/coreservice.war commitid.html
+        #- jar uvf coreservice-webclient/target/webclient.war version.html
+        #- jar uvf coreservice-webclient/target/webclient.war commitid.html
+        - cd coreservice-server/target/
+        - jar -xvf coreservice.war
+        - mkdir info
+        - cp ../../version.html info/
+        - cp ../../commitid.html info/
+        - jar -cvf coreservice.war *
+        - cd ../../coreservice-webclient/target/
+        - jar -xvf webclient.war
+        - mkdir info
+        - cp ../../version.html info/
+        - cp ../../commitid.html info/
+        - jar -cvf webclient.war *
+  post_build:
+    commands:
+      - echo Entered the post_build phase
+      - echo Exiting post_build on `date`
+artifacts:
+  files:
+    - coreservice-server/target/*.war
+    - coreservice-webclient/target/*.war
+  discard-paths: yes
+cache:
+  paths:
+    - '/root/.m2/**/*'
+
+
+---------
+
+lambda fn -- for triggering codebuild
+
+import boto3
+
+def lambda_handler(event, context):
+    cb_client = boto3.client('codebuild', region_name="us-east-1" )
+    s = event['Records'][0]['s3']['object']['key']
+    codebuild_repo = s.split('/')[1].strip()
+    codebuild_repo += '-deploy'
+    response = cb_client.start_build(projectName=codebuild_repo)
+    return "Build triggered"
+
+-------------
+
+codebuild --- buildspec.yaml -- deploy ecs
+
+
+version: 0.2
+
+phases:
+    install:
+      runtime-versions:
+        java: corretto8
+      commands:
+        - echo `aws --version`
+        - echo Entered the pre_build phase...
+    build:
+      commands:
+        - echo Build started on `date`
+        - aws ecs list-services --cluster CF-ALL-APPS-ECS | jq -r .serviceArns[]  | grep consumer- | grep -v emailvalidation | awk -F/ {'print $3'}  > consumer-services.txt
+        - consumer=`cat consumer-services.txt`
+        - for i in ${consumer}; do aws ecs list-tasks --cluster CF-ALL-APPS-ECS --service-name $i | jq -r .taskArns[] | awk -F/ {'print $3'} >> task-ids.txt; done
+        - tasks=`cat task-ids.txt`
+        - for j in ${tasks}; do aws ecs stop-task --task $j --cluster CF-ALL-APPS-ECS; done
+    post_build:
+      commands:
+        - echo Build completed on `date`
+
+------
+
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      java: corretto8
+  pre_build:
+    commands:
+      - echo Nothing to do in the pre_build phase...
+      - aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/q6a3h4j3
+  build:
+    commands:
+      - echo Build started on `date`
+      - mvn install
+      - docker build -t hello-world:latest .
+      - docker tag hello-world:latest public.ecr.aws/q6a3h4j3/hello-world:latest
+      - docker push public.ecr.aws/q6a3h4j3/hello-world:latest
+      - pwd
+      - aws ecs list-services --cluster hello-world | jq -r .serviceArns[]  | grep consumer- | grep -v emailvalidation | awk -F/ {'print $3'}  > consumer-services.txt
+      - consumer=`cat consumer-services.txt`
+      - for i in ${consumer}; do aws ecs list-tasks --cluster hello-world --service-name $i | jq -r .taskArns[] | awk -F/ {'print $3'}  > task-ids.txt; done
+      - tasks=`cat task-ids.txt`
+      - for j in ${tasks}; do aws ecs stop-task --task $j --cluster hello-world; done
+  post_build:
+    commands:
+      - echo Build completed on `date`
+artifacts:
+  files:
+    - target/*.war
+
+
