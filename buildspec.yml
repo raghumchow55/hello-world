@@ -18,7 +18,7 @@ phases:
       - mv target/HelloWorld-2.6.5.war target/white-hart.war
       - docker build -t white-hart:latest .
       - docker tag white-hart:latest 918426310334.dkr.ecr.us-east-1.amazonaws.com/test:latest
-      - docker push 918426310334.dkr.ecr.us-east-1.amazonaws.com/test:latest
+      - docker push 596720955985.dkr.ecr.us-east-1.amazonaws.com/test:latest
       - pwd
       # - aws ecs list-services --cluster white-hart | jq -r .serviceArns[]  | grep white-hart | awk -F/ {'print $3'}  > consumer-services.txt
       # - consumer=`cat consumer-services.txt`
@@ -37,11 +37,11 @@ phases:
   post_build:
     commands:
       - echo Build completed on `date`
-      - IMAGE=918426310334.dkr.ecr.us-east-1.amazonaws.com/test:latest
+      - IMAGE=596720955985.dkr.ecr.us-east-1.amazonaws.com/test:latest
       - sed -r "s/^(\s*image\s*:\s*).*/\1${IMAGE}/" -i "deployment.yml"
       - echo "updated image"
-      - export AWS_ACCESS_KEY_ID="AKIA5LVTZK27MM32JNL7"
-      - export AWS_SECRET_ACCESS_KEY="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"
+      - export AWS_ACCESS_KEY_ID="AKIAYV32XGJI4YJRIYKP"
+      - export AWS_SECRET_ACCESS_KEY="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"
       - aws s3 ls
       - aws eks update-kubeconfig --name eksdemo1
       - kubectl apply -f deployment.yml
