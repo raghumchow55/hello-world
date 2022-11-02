@@ -27,16 +27,19 @@ jobs:
         java-version: '11'
         distribution: 'temurin'
         cache: maven
-    - name: Build with Maven
+    - name: Build with Maven and docker
       run: |
         mvn install
-        ls
-        cd target
-        ls
+        mv target/HelloWorld-2.6.5.war target/white-hart.war
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1        
     - name: Pushing to ecr
       run: |
-        mv target/HelloWorld-2.6.5.war target/white-hart.war
-        docker build -t white-hart:latest .
+        docker build -t white-hart:latest .         
         docker tag white-hart:latest 596720955985.dkr.ecr.us-east-1.amazonaws.com/test:latest
         docker push 596720955985.dkr.ecr.us-east-1.amazonaws.com/test:latest
      
