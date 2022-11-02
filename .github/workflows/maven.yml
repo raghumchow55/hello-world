@@ -39,6 +39,7 @@ jobs:
         aws-region: us-east-1        
     - name: Pushing to ecr
       run: |
+        aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 596720955985.dkr.ecr.us-east-1.amazonaws.com
         docker build -t white-hart:latest .         
         docker tag white-hart:latest 596720955985.dkr.ecr.us-east-1.amazonaws.com/test:latest
         docker push 596720955985.dkr.ecr.us-east-1.amazonaws.com/test:latest
