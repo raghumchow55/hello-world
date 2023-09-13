@@ -1,0 +1,32 @@
+pipeline{
+    agent any
+    stages{
+        stage("Fetch code from github"){
+            steps{
+                git url: "https://github.com/raghumchow55/hello-world"
+                echo 'first job done'
+            }
+        }
+        stage("Code compile"){
+            steps{
+                sh 'mvn compile'
+            }
+        }
+        stage("Code testing"){
+            steps{
+                sh 'mvn test'
+            }
+        }
+        stage("Code qa"){
+            steps{
+                sh 'mvn pmd:pmd'
+                recordIssues(tools: [pmdParser()])
+            }
+        }
+        stage("Code package"){
+            steps{
+                sh 'mvn package'
+            }
+        }
+    }
+}
