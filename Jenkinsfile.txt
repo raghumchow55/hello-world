@@ -3,7 +3,7 @@ pipeline{
     stages{
         stage("Fetch code from github"){
             steps{
-                git url: "https://github.com/raghumchow55/hello-world"
+                git url: 'https://github.com/raghumchow55/hello-world'
                 echo 'first job done'
             }
         }
